@@ -1,0 +1,18 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+
+# Editor files
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Binary output
+minirouter
+test_lpm
+test_acl
+test_fwd
+test_csum
