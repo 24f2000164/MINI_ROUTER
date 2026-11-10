@@ -1,7 +1,10 @@
 /*
- * netdev_tap.c - Linux TAP device driver
+ * netdev_tap.c - Linux TAP device driver back-end.
  * Opens /dev/net/tun and assigns an interface name, sets it UP.
  * Requires CAP_NET_ADMIN (run as root or with setcap).
+ *
+ * Public API uses the netdev_tap_* prefix; the dispatch shim in
+ * netdev.c calls these when NETDEV_USE_TAP is defined at build time.
  */
 
 #include "netdev.h"
@@ -11,19 +14,16 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+/* linux/if.h and net/if.h must NOT both be included; use net/if.h +
+   individual linux headers for what net/if.h misses                     */
 #include <net/if.h>
 #include <linux/if_tun.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <net/if_arp.h>
-#include <ifaddrs.h>
+#include <linux/if_arp.h>   /* ARPHRD_ETHER                              */
 #include <poll.h>
 #include <errno.h>
-
-/* ── Globals ────────────────────────────────────────────────────────────── */
-netdev_iface_t g_ifaces[NETDEV_MAX_IFACES];
-int            g_num_ifaces = 0;
 
 /* ── Open TAP device ────────────────────────────────────────────────────── */
 int netdev_tap_open(netdev_iface_t *iface)
@@ -94,11 +94,8 @@ int netdev_tap_open(netdev_iface_t *iface)
 }
 
 /* ── Receive ────────────────────────────────────────────────────────────── */
-int netdev_recv(netdev_iface_t *iface, packet_t *pkt)
+int netdev_tap_recv(netdev_iface_t *iface, packet_t *pkt)
 {
-    if (iface->flags & NETDEV_FLAG_MOCK)
-        return -1;   /* handled by mock driver                             */
-
     ssize_t n = read(iface->fd, pkt->data, PKT_BUF_SIZE);
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
@@ -114,11 +111,8 @@ int netdev_recv(netdev_iface_t *iface, packet_t *pkt)
 }
 
 /* ── Transmit ───────────────────────────────────────────────────────────── */
-int netdev_send(netdev_iface_t *iface, const packet_t *pkt)
+int netdev_tap_send(netdev_iface_t *iface, const packet_t *pkt)
 {
-    if (iface->flags & NETDEV_FLAG_MOCK)
-        return -1;   /* handled by mock driver                             */
-
     ssize_t n = write(iface->fd, pkt->data, pkt->len);
     if (n < 0) {
         LOG_ERR("write %s: %s", iface->name, strerror(errno));
@@ -131,18 +125,18 @@ int netdev_send(netdev_iface_t *iface, const packet_t *pkt)
 }
 
 /* ── Close ──────────────────────────────────────────────────────────────── */
-void netdev_close(netdev_iface_t *iface)
+void netdev_tap_close(netdev_iface_t *iface)
 {
-    if (!(iface->flags & NETDEV_FLAG_MOCK) && iface->fd >= 0) {
+    if (iface->fd >= 0) {
         close(iface->fd);
         iface->fd = -1;
     }
     iface->flags = 0;
-    LOG_INFO("Interface %s closed", iface->name);
+    LOG_INFO("TAP interface %s closed", iface->name);
 }
 
-/* ── Poll (non-mock) ────────────────────────────────────────────────────── */
-int netdev_poll(int *ready, int max_ready, int timeout_ms)
+/* ── Poll ───────────────────────────────────────────────────────────────── */
+int netdev_tap_poll(int *ready, int max_ready, int timeout_ms)
 {
     struct pollfd fds[NETDEV_MAX_IFACES];
     int n = 0;
@@ -171,38 +165,4 @@ int netdev_poll(int *ready, int max_ready, int timeout_ms)
         }
     }
     return count;
-}
-
-/* ── Helpers ────────────────────────────────────────────────────────────── */
-netdev_iface_t *netdev_find_by_index(int idx)
-{
-    if (idx < 0 || idx >= g_num_ifaces) return NULL;
-    return &g_ifaces[idx];
-}
-
-netdev_iface_t *netdev_find_by_ip(u32 ip4_net)
-{
-    for (int i = 0; i < g_num_ifaces; i++)
-        if (g_ifaces[i].ip4 == ip4_net) return &g_ifaces[i];
-    return NULL;
-}
-
-void netdev_print_stats(void)
-{
-    printf("\n=== Interface Statistics ===\n");
-    printf("%-8s %-10s %-10s %-10s %-10s %-8s %-8s\n",
-           "Name", "RX-pkts", "RX-bytes", "TX-pkts", "TX-bytes",
-           "RX-drop", "TX-drop");
-    for (int i = 0; i < g_num_ifaces; i++) {
-        const netdev_iface_t *iface = &g_ifaces[i];
-        printf("%-8s %-10llu %-10llu %-10llu %-10llu %-8llu %-8llu\n",
-               iface->name,
-               (unsigned long long)iface->rx_packets,
-               (unsigned long long)iface->rx_bytes,
-               (unsigned long long)iface->tx_packets,
-               (unsigned long long)iface->tx_bytes,
-               (unsigned long long)iface->rx_drops,
-               (unsigned long long)iface->tx_drops);
-    }
-    printf("\n");
 }

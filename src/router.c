@@ -12,7 +12,10 @@
 
 /* ── Globals ────────────────────────────────────────────────────────────── */
 router_ctx_t  g_router;
+/* g_log_level is defined here only when not provided by the test harness  */
+#ifndef TEST_BUILD
 int           g_log_level = LOG_LEVEL_INFO;
+#endif
 
 /* ── Signal handler ─────────────────────────────────────────────────────── */
 void router_signal_handler(int sig)
@@ -38,8 +41,14 @@ int router_init(const router_config_t *cfg)
         int rc;
         if (cfg->use_mock)
             rc = netdev_mock_open(&g_ifaces[i]);
-        else
+        else {
+#ifdef NETDEV_USE_TAP
             rc = netdev_tap_open(&g_ifaces[i]);
+#else
+            LOG_ERR("TAP not compiled in; use_mock must be true");
+            rc = -1;
+#endif
+        }
         if (rc < 0) {
             LOG_ERR("Failed to open interface %s", g_ifaces[i].name);
             return -1;

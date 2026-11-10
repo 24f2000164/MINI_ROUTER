@@ -17,6 +17,7 @@ CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -Wshadow \
 LDFLAGS :=
 
 # Source files for the main router (TAP mode, requires Linux + root)
+# -DNETDEV_USE_TAP enables the TAP dispatch path in netdev.c
 ROUTER_SRCS := \
     src/main.c       \
     src/router.c     \
@@ -27,15 +28,21 @@ ROUTER_SRCS := \
     src/routing.c    \
     src/acl.c        \
     src/stats.c      \
-    src/netdev_tap.c
+    src/netdev.c     \
+    src/netdev_tap.c \
+    src/netdev_mock.c
 
-# Source files shared by all unit tests (use mock device driver)
+ROUTER_CFLAGS := $(CFLAGS) -DNETDEV_USE_TAP
+
+# Source files shared by all unit tests (use mock device driver only)
+# No -DNETDEV_USE_TAP → TAP dispatch path is excluded in netdev.c
 COMMON_TEST_SRCS := \
     src/ethernet.c   \
     src/ipv4.c       \
     src/routing.c    \
     src/acl.c        \
     src/stats.c      \
+    src/netdev.c     \
     src/netdev_mock.c
 
 # Forwarding test additionally needs arp, icmp, router dispatch
@@ -55,7 +62,7 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 $(BUILD_DIR)/minirouter: $(ROUTER_SRCS) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(ROUTER_CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "Built: $@"
 
 # ── Unit Tests ───────────────────────────────────────────────────────────────
@@ -84,16 +91,16 @@ test_csum: $(BUILD_DIR)/test_csum
 	./$<
 
 $(BUILD_DIR)/test_lpm: tests/test_lpm.c $(COMMON_TEST_SRCS) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -DTEST_BUILD -o $@ $^ $(LDFLAGS)
 
 $(BUILD_DIR)/test_acl: tests/test_acl.c $(COMMON_TEST_SRCS) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -DTEST_BUILD -o $@ $^ $(LDFLAGS)
 
 $(BUILD_DIR)/test_fwd: tests/test_forwarding.c $(FWD_TEST_SRCS) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -DTEST_BUILD -o $@ $^ $(LDFLAGS)
 
 $(BUILD_DIR)/test_csum: tests/test_checksum.c src/ipv4.c src/ethernet.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -DTEST_BUILD -o $@ $^ $(LDFLAGS)
 
 # ── Clean ────────────────────────────────────────────────────────────────────
 .PHONY: clean

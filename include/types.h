@@ -101,8 +101,8 @@ extern int g_log_level;
 #define LOG(level, fmt, ...) \
     do { if ((level) <= g_log_level) \
         fprintf(stderr, "[%s] " fmt "\n", \
-            (level)==0?"ERR":(level)==1?"WARN":(level)==2?"INFO":"DBG", \
-            ##__VA_ARGS__); } while (0)
+            (level)==0?"ERR":(level)==1?"WARN":(level)==2?"INFO":"DBG" \
+            ,##__VA_ARGS__); } while (0)
 
 #define LOG_ERR(fmt,  ...) LOG(LOG_LEVEL_ERR,  fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...) LOG(LOG_LEVEL_WARN, fmt, ##__VA_ARGS__)

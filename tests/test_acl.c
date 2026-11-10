@@ -5,17 +5,13 @@
 #include "../include/acl.h"
 #include "../include/ipv4.h"
 #include "../include/ethernet.h"
+#include "../include/netdev.h"
 #include "../include/types.h"
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 
 int g_log_level = LOG_LEVEL_ERR;
-
-/* Global stubs required by acl.c -> ip4_parse -> packet validation      */
-/* (netdev globals are not needed for ACL tests)                         */
-netdev_iface_t g_ifaces[NETDEV_MAX_IFACES];
-int            g_num_ifaces = 0;
 
 static int s_pass = 0, s_fail = 0;
 

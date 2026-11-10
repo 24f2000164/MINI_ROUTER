@@ -38,31 +38,14 @@ void ip4_update_checksum(ip4_hdr_t *hdr)
     hdr->check = ip4_checksum(hdr, ip4_hdr_len(hdr));
 }
 
-/* ── TTL decrement (RFC 1624 incremental update) ─────────────────────────── */
+/* ── TTL decrement with full checksum recalculation ──────────────────────── */
 
 u8 ip4_decrement_ttl(ip4_hdr_t *hdr)
 {
     if (hdr->ttl == 0) return 0;
-
-    /*
-     * RFC 1624 incremental checksum:
-     * new_sum = ~(~old_sum - old_field + new_field)
-     * TTL is a single byte at a known offset.  We treat the 16-bit word
-     * containing TTL and Protocol as the changed word.
-     */
-    u16 old_word = *(u16 *)&hdr->ttl;   /* ttl + protocol as one u16    */
     hdr->ttl--;
-    u16 new_word = *(u16 *)&hdr->ttl;
-
-    u32 sum = (u16)(~hdr->check);
-    sum    -= (u16)(~old_word);
-    sum    += (u16)(~new_word);
-
-    /* Adjust for wrap-around carries */
-    while (sum >> 16)
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    hdr->check = (u16)(~sum);
-
+    /* Recalculate the checksum fully – simpler and always correct */
+    ip4_update_checksum(hdr);
     return hdr->ttl;
 }
 

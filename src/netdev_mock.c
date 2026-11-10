@@ -1,9 +1,12 @@
 /*
- * netdev_mock.c - In-memory mock network device driver for unit testing
+ * netdev_mock.c - In-memory mock network device driver for unit testing.
  *
  * Does NOT require root or /dev/net/tun.
  * Inject packets with netdev_mock_inject(); retrieve transmitted packets
  * with netdev_mock_dequeue_tx().
+ *
+ * Public API uses the netdev_mock_* prefix; the dispatch shim in
+ * netdev.c calls netdev_mock_recv/send/close/poll for mock interfaces.
  */
 
 #include "netdev.h"
@@ -63,10 +66,8 @@ void netdev_mock_inject(int iface_idx, const u8 *data, u32 len)
 }
 
 /* ── Receive from mock RX queue ─────────────────────────────────────────── */
-int netdev_recv(netdev_iface_t *iface, packet_t *pkt)
+int netdev_mock_recv(netdev_iface_t *iface, packet_t *pkt)
 {
-    if (!(iface->flags & NETDEV_FLAG_MOCK)) return -1;
-
     int idx = iface->index;
     if (idx < 0 || idx >= NETDEV_MAX_IFACES) return -1;
 
@@ -86,10 +87,8 @@ int netdev_recv(netdev_iface_t *iface, packet_t *pkt)
 }
 
 /* ── Send to mock TX queue ──────────────────────────────────────────────── */
-int netdev_send(netdev_iface_t *iface, const packet_t *pkt)
+int netdev_mock_send(netdev_iface_t *iface, const packet_t *pkt)
 {
-    if (!(iface->flags & NETDEV_FLAG_MOCK)) return -1;
-
     int idx = iface->index;
     if (idx < 0 || idx >= NETDEV_MAX_IFACES) return -1;
 
@@ -128,7 +127,7 @@ bool netdev_mock_dequeue_tx(int iface_idx, packet_t *out)
 }
 
 /* ── Poll mock – simply check if any RX queue has data ──────────────────── */
-int netdev_poll(int *ready, int max_ready, int timeout_ms)
+int netdev_mock_poll(int *ready, int max_ready, int timeout_ms)
 {
     (void)timeout_ms;
     int count = 0;
@@ -141,7 +140,7 @@ int netdev_poll(int *ready, int max_ready, int timeout_ms)
 }
 
 /* ── Close mock ─────────────────────────────────────────────────────────── */
-void netdev_close(netdev_iface_t *iface)
+void netdev_mock_close(netdev_iface_t *iface)
 {
     iface->flags = 0;
     LOG_INFO("Mock interface %s closed", iface->name);
